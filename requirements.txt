@@ -1,0 +1,5 @@
+eaf_base_api
+bs4
+lxml
+h2
+brotli
