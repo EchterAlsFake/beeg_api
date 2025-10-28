@@ -15,17 +15,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 import os
-import math
-import html
-import httpx
 import logging
-import argparse
+import traceback
 
 from functools import cached_property
-from typing import Union, Generator, Optional
-from base_api.modules.config import RuntimeConfig
-from base_api.base import BaseCore, setup_logger, Helper
-from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+from base_api.base import BaseCore, setup_logger
 
 try:
     from modules.consts import *
@@ -38,15 +32,66 @@ class Video:
     def __init__(self, url: str, core: BaseCore):
         self.url = url
         self.core = core
-        self.core.enable_logging(level=logging.DEBUG)
-        self.html_content = self.core.fetch(self.url)
-        self.json_data = self.core.fetch(f"https://store.externulls.com/facts/file/{self.video_id}", get_response=True).json() # This is the holy grail
+        self.json_data: dict = self.core.fetch(f"https://store.externulls.com/facts/file/{self.key}", get_response=True).json() # This is the holy grail
+        self.logger = setup_logger(name="BEEG API - [Video]", log_file=None, level=logging.ERROR)
+
+    def enable_logging(self, log_file: str = None, level=None, log_ip: str = None, log_port: int = None):
+        self.logger = setup_logger(name="BEEG API - [Video]", log_file=log_file, level=level, http_ip=log_ip,
+                                   http_port=log_port)
+
+    @cached_property
+    def key(self) -> str:
+        return self.url.split("/")[-1].strip("-0") # The video key used across the page for all APIs
+
+    @cached_property
+    def title(self) -> str:
+        return self.json_data.get("file").get("data")[0].get("cd_value")
 
     @cached_property
     def video_id(self) -> str:
-        return self.url.split("/")[-1].strip("-0")
+        return self.json_data.get("file").get("data")[0].get("id")
 
+    @cached_property
+    def duration(self) -> int:
+        return self.json_data.get("file").get("fl_duration")
 
+    @cached_property
+    def m3u8_base_url(self) -> str:
+        url = self.json_data.get("file").get("hls_resources").get("fl_cdn_multi")
+        return f"https://video.externulls.com/{url}"
+
+    def get_segments(self, quality) -> list:
+        """
+        :param quality: (str, Quality) The video quality
+        :return: (list) A list of segments (the .ts files)
+        """
+        segments = self.core.get_segments(quality=quality, m3u8_url_master=self.m3u8_base_url)
+        return segments
+
+    def download(self, downloader, quality, path="./", callback=None, no_title=False, remux: bool = False,
+                 callback_remux=None) -> bool:
+        """
+        :param callback:
+        :param downloader:
+        :param quality:
+        :param path:
+        :param no_title:
+        :param remux:
+        :param callback_remux:
+        :return:
+        """
+        if not no_title:
+            path = os.path.join(path, f"{self.title}.mp4")
+
+        try:
+            self.core.download(video=self, quality=quality, path=path, callback=callback, downloader=downloader,
+                               remux=remux, callback_remux=callback_remux)
+            return True
+
+        except Exception:
+            error = traceback.format_exc()
+            self.logger.error(error)
+            return False
 
 
 class Client:
@@ -57,7 +102,3 @@ class Client:
     def get_video(self, url: str) -> Video:
         return Video(url, core=self.core)
 
-
-if __name__ == "__main__":
-    client = Client()
-    video = client.get_video("https://beeg.com/-0830673897358738")
