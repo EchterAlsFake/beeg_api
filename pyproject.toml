@@ -15,7 +15,6 @@ authors = [
 dependencies = [
     "eaf_base_api",
     "httpx",
-    "h2"
 ]
 classifiers = [
     "Programming Language :: Python",
@@ -26,6 +25,7 @@ Homepage = "https://github.com/EchterAlsFake/beeg_api"
 
 [project.optional-dependencies]
 av = ["av; python_version >= '3.10'"]
+httpx = ["httpx[socks5,http2]"]
 
 [tool.uv.build-backend]
 module-root = ""

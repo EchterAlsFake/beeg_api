@@ -124,11 +124,10 @@ wheels = [
 
 [[package]]
 name = "beeg-api"
-version = "1.0"
+version = "1.1"
 source = { editable = "." }
 dependencies = [
     { name = "eaf-base-api" },
-    { name = "h2" },
     { name = "httpx" },
 ]
 
@@ -136,15 +135,18 @@ dependencies = [
 av = [
     { name = "av", marker = "python_full_version >= '3.10'" },
 ]
+httpx = [
+    { name = "httpx", extra = ["http2"] },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "av", marker = "python_full_version >= '3.10' and extra == 'av'" },
     { name = "eaf-base-api" },
-    { name = "h2" },
     { name = "httpx" },
+    { name = "httpx", extras = ["socks5", "http2"], marker = "extra == 'httpx'" },
 ]
-provides-extras = ["av"]
+provides-extras = ["av", "httpx"]
 
 [[package]]
 name = "brotli"
