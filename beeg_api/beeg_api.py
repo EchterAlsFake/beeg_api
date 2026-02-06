@@ -1,5 +1,5 @@
 """
-Copyright (C) 2025 Johannes Habel
+Copyright (C) 2025-2026 Johannes Habel
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,8 +16,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 import os
 import logging
-import traceback
+import threading
 
+from typing import Optional
 from functools import cached_property
 from base_api.base import BaseCore, setup_logger
 
@@ -68,30 +69,35 @@ class Video:
         segments = self.core.get_segments(quality=quality, m3u8_url_master=self.m3u8_base_url)
         return segments
 
-    def download(self, downloader, quality, path="./", callback=None, no_title=False, remux: bool = False,
-                 callback_remux=None) -> bool:
+    def download(self, quality, path="./", callback=None, no_title=False, remux: bool = False,
+                 callback_remux=None, start_segment: int = 0, stop_event: Optional[threading.Event] = None,
+                 segment_state_path: Optional[str] = None, segment_dir: Optional[str] = None,
+                 return_report: bool = False, cleanup_on_stop: bool = True, keep_segment_dir: bool = False
+                 ) -> bool:
         """
         :param callback:
-        :param downloader:
         :param quality:
         :param path:
         :param no_title:
         :param remux:
         :param callback_remux:
+        :param start_segment:
+        :param stop_event:
+        :param segment_state_path:
+        :param segment_dir:
+        :param return_report:
+        :param cleanup_on_stop:
+        :param keep_segment_dir:
         :return:
         """
         if not no_title:
             path = os.path.join(path, f"{self.title}.mp4")
 
-        try:
-            self.core.download(video=self, quality=quality, path=path, callback=callback, downloader=downloader,
-                               remux=remux, callback_remux=callback_remux)
-            return True
-
-        except Exception:
-            error = traceback.format_exc()
-            self.logger.error(error)
-            return False
+        return self.core.download(video=self, quality=quality, path=path, callback=callback, remux=remux,
+                                  callback_remux=callback_remux, start_segment=start_segment, stop_event=stop_event,
+                                  segment_state_path=segment_state_path, segment_dir=segment_dir,
+                                  return_report=return_report,
+                                  cleanup_on_stop=cleanup_on_stop, keep_segment_dir=keep_segment_dir)
 
 
 class Client:

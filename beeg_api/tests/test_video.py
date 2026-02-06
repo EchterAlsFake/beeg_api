@@ -16,4 +16,5 @@ def test_all():
     assert isinstance(video.video_id, int) and len(str(video.video_id)) > 0
     assert isinstance(video.json_data, dict)
     assert isinstance(video.key, str) and len(video.key) > 0
-    assert video.download(quality="worst", downloader="threaded") is True
+    stuff = video.download(quality="worst", return_report=True)
+    assert stuff["status"] == "completed"
