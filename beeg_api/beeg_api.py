@@ -24,17 +24,36 @@ from base_api.base import BaseCore, setup_logger
 
 try:
     from modules.consts import *
+    from modules.errors import *
 
 except (ModuleNotFoundError, ImportError):
     from .modules.consts import *
+    from .modules.errors import *
+
+try:
+    import lxml
+    parser = "lxml"
+
+except (ModuleNotFoundError, ImportError):
+    parser = "html.parser"
 
 
 class Video:
-    def __init__(self, url: str, core: BaseCore):
+    def __init__(self, url: str, core: BaseCore, json_data: dict = None):
         self.url = url
         self.core = core
-        self.json_data: dict = self.core.fetch(f"https://store.externulls.com/facts/file/{self.key}", get_response=True).json() # This is the holy grail
+        self.json_data = json_data
         self.logger = setup_logger(name="BEEG API - [Video]", log_file=None, level=logging.ERROR)
+
+    async def init(self):
+        if not self.json_data:
+            self.json_data = await self.get_json_content()
+
+        return self
+
+    async def get_json_content(self) -> dict:
+        response = await self.core.fetch(f"https://store.externulls.com/facts/file/{self.key}", get_response=True)
+        return response.json()  # This is the holy grail
 
     def enable_logging(self, log_file: str = None, level=None, log_ip: str = None, log_port: int = None):
         self.logger = setup_logger(name="BEEG API - [Video]", log_file=log_file, level=level, http_ip=log_ip,
@@ -61,15 +80,15 @@ class Video:
         url = self.json_data.get("file").get("hls_resources").get("fl_cdn_multi")
         return f"https://video.externulls.com/{url}"
 
-    def get_segments(self, quality) -> list:
+    async def get_segments(self, quality) -> list:
         """
         :param quality: (str, Quality) The video quality
         :return: (list) A list of segments (the .ts files)
         """
-        segments = self.core.get_segments(quality=quality, m3u8_url_master=self.m3u8_base_url)
+        segments = await self.core.get_segments(quality=quality, m3u8_url_master=self.m3u8_base_url)
         return segments
 
-    def download(self, quality, path="./", callback=None, no_title=False, remux: bool = False,
+    async def download(self, quality, path="./", callback=None, no_title=False, remux: bool = False,
                  callback_remux=None, start_segment: int = 0, stop_event: Optional[threading.Event] = None,
                  segment_state_path: Optional[str] = None, segment_dir: Optional[str] = None,
                  return_report: bool = False, cleanup_on_stop: bool = True, keep_segment_dir: bool = False
@@ -93,7 +112,7 @@ class Video:
         if not no_title:
             path = os.path.join(path, f"{self.title}.mp4")
 
-        return self.core.download(video=self, quality=quality, path=path, callback=callback, remux=remux,
+        return await self.core.download(video=self, quality=quality, path=path, callback=callback, remux=remux,
                                   callback_remux=callback_remux, start_segment=start_segment, stop_event=stop_event,
                                   segment_state_path=segment_state_path, segment_dir=segment_dir,
                                   return_report=return_report,
@@ -105,6 +124,6 @@ class Client:
         self.core = core or BaseCore()
         self.core.initialize_session()
 
-    def get_video(self, url: str) -> Video:
-        return Video(url, core=self.core)
+    async def get_video(self, url: str) -> Video:
+        return await Video(url, core=self.core).init()
 
