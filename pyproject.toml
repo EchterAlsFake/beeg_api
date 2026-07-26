@@ -4,10 +4,10 @@ build-backend = "uv_build"
 
 [project]
 name = "unofficial-api-for-beeg"
-version = "1.5"
+version = "1.6"
 description = "An asynchronous Python API wrapper and scraper for beeg.com"
 requires-python = ">=3.12"
-license = "LGPL-3.0-only"
+license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
 authors = [
     { name = "Johannes Habel", email = "EchterAlsFake@proton.me" }
@@ -32,7 +32,7 @@ dependencies = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.12",
@@ -45,6 +45,9 @@ classifiers = [
 Homepage = "https://github.com/EchterAlsFake/unofficial-api-for-beeg"
 Repository = "https://github.com/EchterAlsFake/unofficial-api-for-beeg"
 "Bug Tracker" = "https://github.com/EchterAlsFake/unofficial-api-for-beeg/issues"
+"Support me on Ko-Fi" = "https://ko-fi.com/EchterAlsFake"
+"Donate via PayPal" = "https://paypal.me/EchterAlsFake"
+"Donate via Crypto" = "https://nowpayments.io/donation/EchterAlsFake"
 
 [project.optional-dependencies]
 av = ["av"]
