@@ -3,33 +3,32 @@ from __future__ import annotations
 import copy
 import os
 import json
-import asyncio
 
-from curl_cffi import Response
 from dataclasses import dataclass
+from typing import ClassVar
 from base_api.modules.type_hints import DownloadReport
-from base_api import BaseCore, DownloadConfigHLS, BaseMedia
-from base_api.modules.errors import InvalidProxy, BotProtectionDetected, UnknownError, NetworkRequestError
+from base_api import BaseCore, DownloadConfigHLS, BaseMedia, media_field
+from base_api.modules.errors import (
+    BotProtectionDetected,
+    HTTPStatusError,
+    InvalidProxy,
+    NetworkRequestError,
+    RequestRetriesExhausted,
+    UnknownError,
+)
 from beeg_api.modules.errors import NetworkError, NotFound, UnknownNetworkError, BotDetection, ProxyError, DownloadFailed
 
 
-async def get_html_content(core: BaseCore, url: str) -> str | None | dict:
-    # What should I do here?
+async def get_html_content(core: BaseCore, url: str) -> str:
     try:
-        content = await core.fetch(url)
-        if isinstance(content, str):
-            return content
+        return await core.fetch_text(url)
 
-        if isinstance(content, Response):
-            if content.status_code == 404:
-                raise NotFound(f"Server returned 404 for: {url}")
+    except HTTPStatusError as e:
+        if e.status_code == 404:
+            raise NotFound(f"Server returned 404 for: {url}") from e
+        raise NetworkError(str(e)) from e
 
-        if not content.ok:
-            raise NetworkError(f"Server returned HTTP: {content.status_code}")
-
-        return content.text
-
-    except NetworkRequestError as e:
+    except (NetworkRequestError, RequestRetriesExhausted) as e:
         raise NetworkError(str(e)) from e
 
     except InvalidProxy as e:
@@ -46,41 +45,44 @@ async def get_html_content(core: BaseCore, url: str) -> str | None | dict:
 class Video(BaseMedia):
     url: str
     core: BaseCore
-    title: str | None = None
-    video_id: str | None = None
-    duration: int | None = None
-    m3u8_base_url: str | None = None
-    key: str | None = None
+    title: str | None = media_field("api")
+    video_id: str | None = media_field("api")
+    duration: int | None = media_field("api")
+    m3u8_base_url: str | None = media_field("api")
+    key: str | None = media_field("api")
 
-    async def _perform_load(self, api: bool, html: bool, anything_else: bool):
-        # I know this seems as if this doesn't make sense, but it does, trust the process!
-        await asyncio.gather(self._fetch_api())
+    loader_methods: ClassVar[dict[str, str]] = {"api": "_load_api"}
 
-    async def _fetch_api(self) -> None:
+    async def _load_api(self) -> dict[str, object]:
         """
         Fetches the data from beeg's API and parses it into the dataclass objects
         :return:
         """
 
-        self.key = self.url.split("/")[-1].strip("-0")  # The video key used across the page for all APIs
+        key = self.url.split("/")[-1].strip("-0")
 
-        json_data = await get_html_content(url=f"https://store.externulls.com/facts/file/{self.key}",
+        json_data = await get_html_content(url=f"https://store.externulls.com/facts/file/{key}",
                                                 core=self.core)
-        assert isinstance(json_data, str)
         json_data = json.loads(json_data)
         # Usually I'd offload to a thread here, but for 50kb of json we don't need the 5 microseconds lol
 
-        self.title = json_data.get("file").get("data")[0].get("cd_value")
-        self.video_id = json_data.get("file").get("data")[0].get("id")
-        self.duration = json_data.get("file").get("fl_duration")
-        url = json_data.get("file").get("hls_resources").get("fl_cdn_multi")
-        self.m3u8_base_url = f"https://video.externulls.com/{url}"
+        file_data = json_data.get("file")
+        record = file_data.get("data")[0]
+        hls_url = file_data.get("hls_resources").get("fl_cdn_multi")
+        return {
+            "title": record.get("cd_value"),
+            "video_id": record.get("id"),
+            "duration": file_data.get("fl_duration"),
+            "m3u8_base_url": f"https://video.externulls.com/{hls_url}",
+            "key": key,
+        }
 
     async def download(self, configuration: DownloadConfigHLS) -> bool | DownloadReport:
         """
         :param configuration:
         :return:
         """
+        await self.load_fields("m3u8_base_url", "title")
         config = copy.deepcopy(configuration)
         config.m3u8_base_url = self.m3u8_base_url
         if not config.no_title:
@@ -100,5 +102,6 @@ class Client:
 
     async def get_video(self, url: str, load_api: bool = True):
         video = Video(url=url, core=self.core)
-        return await video.load(api=load_api)
-
+        if load_api:
+            await video.load_sources("api")
+        return video
