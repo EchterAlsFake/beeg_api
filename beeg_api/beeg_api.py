@@ -59,7 +59,7 @@ class Video(BaseMedia):
         :return:
         """
 
-        key = self.url.split("/")[-1].strip("-0")
+        key = self.url.split("/")[-1].removesuffix("-0")
 
         json_data = await get_html_content(url=f"https://store.externulls.com/facts/file/{key}",
                                                 core=self.core)
