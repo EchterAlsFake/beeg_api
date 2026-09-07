@@ -4,10 +4,14 @@ import copy
 import os
 import json
 
+import argparse
+import asyncio
+
 from dataclasses import dataclass
 from typing import ClassVar
 from base_api.modules.type_hints import DownloadReport
 from base_api import BaseCore, DownloadConfigHLS, BaseMedia, media_field
+from base_api.modules.static_functions import str_to_bool
 from base_api.modules.errors import (
     BotProtectionDetected,
     HTTPStatusError,
@@ -96,7 +100,9 @@ class Video(BaseMedia):
 
 
 class Client:
-    def __init__(self, core: BaseCore = BaseCore()):
+    def __init__(self, core: BaseCore | None = None):
+        if core is None:
+            core = BaseCore()
         self.core = core
         self.core.initialize_session()
 
@@ -105,3 +111,56 @@ class Client:
         if load_api:
             await video.load_sources("api")
         return video
+
+
+def create_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Beeg API Command Line Interface")
+    parser.add_argument("--download", metavar="URL", type=str, help="URL to download from")
+    parser.add_argument("--quality", metavar="best|half|worst", type=str, default="best", help="The video quality (best, half, worst)")
+    parser.add_argument("--file", metavar="FILE", type=str, help="(Optional) Specify a file with URLs (separated with new lines)")
+    parser.add_argument("--output", metavar="DIR", type=str, required=True, help="The output path (with filename or directory)")
+    parser.add_argument("--no-title", metavar="True,False", type=str, nargs="?", const="True", default="False",
+                        help="Whether to apply video title automatically to output path or not")
+    return parser
+
+
+async def run_main(args_list: list[str] | None = None):
+    parser = create_parser()
+    args = parser.parse_args(args_list)
+    no_title = str_to_bool(args.no_title) if isinstance(args.no_title, str) else bool(args.no_title)
+    config = DownloadConfigHLS(quality=args.quality, path=args.output, no_title=no_title)
+
+    urls: list[str] = []
+    if args.download:
+        urls.append(args.download)
+    if args.file:
+        with open(args.file, "r") as f:
+            urls.extend([line.strip() for line in f if line.strip()])
+
+    if not urls:
+        parser.print_help()
+        return
+
+    client = Client()
+    for url in urls:
+        print(f"Fetching video information for: {url}")
+        try:
+            video = await client.get_video(url)
+            title = getattr(video, "title", None) or url
+            print(f"Starting download for: {title}")
+            await video.download(config)
+            print(f"Download complete: {title}")
+        except Exception as e:
+            print(f"Error downloading {url}: {e}")
+
+
+def main():
+    try:
+        asyncio.run(run_main())
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user.")
+
+
+if __name__ == "__main__":
+    main()
+
